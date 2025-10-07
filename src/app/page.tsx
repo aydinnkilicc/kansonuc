@@ -23,7 +23,14 @@ export default function Home() {
     try {
       if (localProcess && file.type === "application/pdf") {
         // Client-side PDF OCR fallback: render pages to image and OCR
-        const { getDocument } = await import("pdfjs-dist");
+        const pdfjsLib = (await import("pdfjs-dist")) as unknown as {
+          GlobalWorkerOptions: { workerSrc: string };
+          getDocument: (args: { data: ArrayBuffer }) => { promise: any };
+        };
+        // Ensure PDF.js worker can load on Vercel by using a CDN worker script
+        // Version must match installed pdfjs-dist
+        pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+        const { getDocument } = pdfjsLib;
         const pdfjs = await getDocument({ data: await file.arrayBuffer() }).promise;
         let combinedText = "";
         const { createWorker } = await import("tesseract.js");
