@@ -23,10 +23,7 @@ export default function Home() {
     try {
       if (localProcess && file.type === "application/pdf") {
         // Client-side PDF OCR fallback: render pages to image and OCR
-        const pdfjsLib = (await import("pdfjs-dist")) as unknown as {
-          GlobalWorkerOptions: { workerSrc: string };
-          getDocument: (args: { data: ArrayBuffer }) => { promise: any };
-        };
+        const pdfjsLib = (await import("pdfjs-dist/build/pdf")) as unknown as typeof import("pdfjs-dist/build/pdf");
         // Ensure PDF.js worker can load on Vercel by using a CDN worker script
         // Version must match installed pdfjs-dist
         pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
