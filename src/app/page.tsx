@@ -1,0 +1,89 @@
+"use client";
+import { useState } from "react";
+
+export default function Home() {
+  const [file, setFile] = useState<File | null>(null);
+  const [report, setReport] = useState<string>("");
+  const [rawText, setRawText] = useState<string>("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setReport("");
+    setRawText("");
+    if (!file) {
+      setError("Lütfen bir dosya seçin.");
+      return;
+    }
+    const form = new FormData();
+    form.append("file", file);
+    setLoading(true);
+    try {
+      const res = await fetch("/api/analyze", { method: "POST", body: form });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "İşlem başarısız");
+      setReport(data.report || "");
+      setRawText(data.rawText || "");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Beklenmeyen bir hata oluştu";
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="min-h-screen p-6 sm:p-10 flex flex-col items-center">
+      <div className="max-w-3xl w-full">
+        <h1 className="text-2xl sm:text-3xl font-semibold mb-2">AI Klinik Patolog</h1>
+        <p className="text-sm text-gray-600 dark:text-gray-300 mb-6">
+          Kan tahlili raporunuzu (PDF, JPG, PNG) yükleyin. Raporunuz, insan dostu ve şefkatli bir dille çözümlensin.
+        </p>
+
+        <form onSubmit={onSubmit} className="space-y-4">
+          <input
+            type="file"
+            accept="application/pdf,image/png,image/jpeg"
+            onChange={(e) => setFile(e.target.files?.[0] || null)}
+            className="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200"
+          />
+          <button
+            type="submit"
+            disabled={loading}
+            className="px-4 py-2 rounded-md bg-black text-white disabled:opacity-60"
+          >
+            {loading ? "Analiz ediliyor..." : "Analiz Et"}
+          </button>
+        </form>
+
+        {error && (
+          <div className="mt-4 text-red-600 text-sm">{error}</div>
+        )}
+
+        {report && (
+          <div className="mt-8">
+            <h2 className="text-xl font-semibold mb-3">Analiz Raporu</h2>
+            <pre className="whitespace-pre-wrap bg-gray-50 dark:bg-gray-900 p-4 rounded-md text-sm">
+              {report}
+            </pre>
+          </div>
+        )}
+
+        {rawText && (
+          <details className="mt-6">
+            <summary className="cursor-pointer text-sm text-gray-600 dark:text-gray-300">Çıkarılan Ham Metin (geliştirici görünümü)</summary>
+            <pre className="whitespace-pre-wrap bg-gray-50 dark:bg-gray-900 p-4 rounded-md text-xs mt-2">
+              {rawText}
+            </pre>
+          </details>
+        )}
+
+        <p className="mt-10 text-xs text-gray-500">
+          Bu analiz tıbbi bir tanı niteliği taşımaz ve yalnızca bilgilendirme amaçlıdır. Sağlığınızla ilgili tüm kararlar için mutlaka bir hekime danışmanız gerekmektedir.
+        </p>
+      </div>
+    </div>
+  );
+}
