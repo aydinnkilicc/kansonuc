@@ -1,11 +1,13 @@
 "use client";
 import { useState } from "react";
+import { parseLabText, formatReport } from "@/lib/report";
 
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
   const [report, setReport] = useState<string>("");
   const [rawText, setRawText] = useState<string>("");
   const [loading, setLoading] = useState(false);
+  const [localProcess, setLocalProcess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function onSubmit(e: React.FormEvent) {
@@ -17,15 +19,40 @@ export default function Home() {
       setError("Lütfen bir dosya seçin.");
       return;
     }
-    const form = new FormData();
-    form.append("file", file);
     setLoading(true);
     try {
-      const res = await fetch("/api/analyze", { method: "POST", body: form });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "İşlem başarısız");
-      setReport(data.report || "");
-      setRawText(data.rawText || "");
+      if (localProcess && file.type === "application/pdf") {
+        // Client-side PDF OCR fallback: render pages to image and OCR
+        const { getDocument } = await import("pdfjs-dist");
+        const pdfjs = await getDocument({ data: await file.arrayBuffer() }).promise;
+        let combinedText = "";
+        const { createWorker } = await import("tesseract.js");
+        const worker = await createWorker("eng+tur");
+        for (let i = 1; i <= pdfjs.numPages; i++) {
+          const page = await pdfjs.getPage(i);
+          const viewport = page.getViewport({ scale: 2 });
+          const canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d");
+          if (!ctx) continue;
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          await page.render({ canvasContext: ctx as CanvasRenderingContext2D, viewport }).promise;
+          const { data } = await worker.recognize(canvas);
+          combinedText += "\n" + (data.text || "");
+        }
+        await worker.terminate();
+        const parsed = parseLabText(combinedText);
+        setReport(formatReport(parsed));
+        setRawText(combinedText);
+      } else {
+        const form = new FormData();
+        form.append("file", file);
+        const res = await fetch("/api/analyze", { method: "POST", body: form });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || "İşlem başarısız");
+        setReport(data.report || "");
+        setRawText(data.rawText || "");
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Beklenmeyen bir hata oluştu";
       setError(message);
@@ -49,6 +76,10 @@ export default function Home() {
             onChange={(e) => setFile(e.target.files?.[0] || null)}
             className="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200"
           />
+          <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+            <input type="checkbox" checked={localProcess} onChange={(e) => setLocalProcess(e.target.checked)} />
+            Dosyayı cihazımda işle (özellikle resim/PDF OCR için)
+          </label>
           <button
             type="submit"
             disabled={loading}
